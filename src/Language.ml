@@ -2,7 +2,8 @@
    The library provides "@type ..." syntax extension and plugins like show, etc.
 *)
 open GT
-
+open List
+open Ostap
 (* Opening a library for combinator-based syntax analysis *)
 open Ostap.Combinators
        
@@ -76,11 +77,25 @@ module Expr =
          DECIMAL --- a decimal constant [0-9]+ as a string
                                                                                                                   
     *)
-    ostap (                                      
-      parse: empty {failwith "Not yet implemented"}
+    let identity x = x
+    let make_operation operation = (ostap ($(operation)), fun x y -> Binop (operation, x, y))
+
+    ostap (
+      	parse: expression;
+      	expression:
+    		!(Util.expr identity
+          	[|
+            	`Lefta, [make_operation "!!"];
+            	`Lefta, [make_operation "&&"];
+            	`Nona,  [make_operation "<="; make_operation ">="; make_operation "<"; make_operation ">"; make_operation "=="; make_operation "!="];
+            	`Lefta, [make_operation "+"; make_operation "-"];
+            	`Lefta, [make_operation "*"; make_operation "/"; make_operation "%"]
+          	|]
+          	operations
+     	);
+     	operations: x:IDENT {Var x} | n:DECIMAL {Const n} | -"(" expression -")"
     )
-    
-  end
+   end
                     
 (* Simple statements: syntax and sematics *)
 module Stmt =
@@ -102,16 +117,22 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let rec eval ((st, i, o) as conf) stmt =
-      match stmt with
-      | Read    x       -> (match i with z::i' -> (Expr.update x z st, i', o) | _ -> failwith "Unexpected end of input")
-      | Write   e       -> (st, i, o @ [Expr.eval st e])
-      | Assign (x, e)   -> (Expr.update x (Expr.eval st e) st, i, o)
-      | Seq    (s1, s2) -> eval (eval conf s1) s2
-                                
+    let rec eval (s, i, o) expression = match expression with
+    	| Read x           -> let (h :: rest) = i in (Expr.update x h s, rest, o)
+		| Write e          -> (s, i, o @ [(Expr.eval s e)])
+		| Assign (x, expr) -> (Expr.update x (Expr.eval s expr) s, i, o)
+		| Seq (s_, t_)     -> eval (eval (s, i, o) s_) t_
+		| _                -> failwith (Printf.sprintf "Unsupported expression")
+ 
+
     (* Statement parser *)
     ostap (
-      parse: empty {failwith "Not yet implemented"}
+    	parse: statements;
+		statements: <s1::s2> : !(Util.listBy)[ostap (";")][stmt] {List.fold_left (fun x y -> Seq (x, y)) s1 s2};
+		stmt:
+			x:IDENT ":=" e:!(Expr.parse) {Assign (x, e)}
+				| "write" "(" e:!(Expr.parse) ")" {Write e}
+				| "read" "(" x:IDENT ")" {Read x}
     )
       
   end

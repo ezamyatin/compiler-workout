@@ -1,5 +1,5 @@
 (* X86 codegeneration interface *)
-
+open List
 (* The registers: *)
 let regs = [|"%ebx"; "%ecx"; "%esi"; "%edi"; "%eax"; "%edx"; "%ebp"; "%esp"|]
 
@@ -80,7 +80,17 @@ open SM
    Take an environment, a stack machine program, and returns a pair --- the updated environment and the list
    of x86 instructions
 *)
-let compile env code = failwith "Not yet implemented"
+
+let compile_operation env op = match op with
+  | BINOP operation -> failwith ""
+  | CONST x         -> failwith ""
+  | READ            -> failwith ""
+  | WRITE           -> failwith ""
+  | LD x            -> failwith ""
+  | ST x            -> failwith ""
+
+
+let compile env code = fold_left (fun (e, res) x -> let (env', res') = compile_operation e x in (env', res @ res')) (env, []) code
 
 (* A set of strings *)           
 module S = Set.Make (String)
